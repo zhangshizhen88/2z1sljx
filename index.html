@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>试衣间</title>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; }
+  body {
+    font-family: -apple-system, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+    background:#fafafa; color:#1d1d1f;
+    -webkit-font-smoothing: antialiased;
+  }
+  canvas { position:fixed; inset:0; }
+
+  #ui {
+    position:fixed; left:32px; top:50%; transform:translateY(-50%);
+    width:300px; max-height:calc(100vh - 64px); overflow-y:auto;
+    background:#fff; border-radius:18px;
+    padding:28px 24px; z-index:10;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 40px rgba(0,0,0,.08);
+    scrollbar-width:none;
+  }
+  #ui::-webkit-scrollbar { display:none; }
+
+  .brand { margin-bottom:24px; }
+  .brand h1 { font-size:22px; font-weight:600; letter-spacing:-.02em; }
+  .brand p { font-size:13px; color:#86868b; margin-top:4px; }
+
+  .group { padding:18px 0; border-top:1px solid rgba(0,0,0,.06); }
+  .group-title {
+    font-size:12px; font-weight:600; color:#86868b;
+    letter-spacing:.05em; margin-bottom:12px;
+  }
+
+  .row { display:flex; justify-content:space-between; align-items:center;
+    font-size:14px; margin-bottom:6px; }
+  .row .num { color:#86868b; font-variant-numeric:tabular-nums; }
+  input[type=range] {
+    width:100%; height:4px; -webkit-appearance:none; appearance:none;
+    background:rgba(0,0,0,.1); border-radius:4px; margin-bottom:14px; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance:none; width:20px; height:20px; border-radius:50%;
+    background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.3); cursor:grab;
+  }
+
+  .opts { display:flex; flex-wrap:wrap; gap:8px; }
+  .opt {
+    padding:7px 14px; border-radius:100px; cursor:pointer;
+    background:rgba(0,0,0,.05); color:#1d1d1f;
+    font-size:13px; transition:all .2s ease; user-select:none;
+  }
+  .opt:hover { background:rgba(0,0,0,.09); }
+  .opt.on { background:#1d1d1f; color:#fff; }
+
+  .colors { display:flex; gap:10px; margin-top:4px; }
+  .dot {
+    width:26px; height:26px; border-radius:50%; cursor:pointer;
+    border:none; transition:all .2s ease;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);
+  }
+  .dot.on { box-shadow:0 0 0 2px #fff, 0 0 0 4px #1d1d1f; transform:scale(1.08); }
+
+  .btn {
+    width:100%; padding:12px; border:none; border-radius:12px;
+    background:#1d1d1f; color:#fff; font-size:14px; font-weight:500;
+    cursor:pointer; font-family:inherit; margin-top:4px;
+    transition:opacity .2s ease;
+  }
+  .btn:hover { opacity:.85; }
+
+  .saved {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:12px 0; border-bottom:1px solid rgba(0,0,0,.06);
+    font-size:13px; animation:fade .3s ease;
+  }
+  .saved .del { background:none; border:none; color:#86868b;
+    cursor:pointer; font-size:13px; padding:4px; }
+  .saved .del:hover { color:#ff3b30; }
+  @keyframes fade { from{opacity:0; transform:translateY(4px);} }
+
+  #toast {
+    position:fixed; bottom:32px; left:50%; transform:translateX(-50%) translateY(80px);
+    background:rgba(29,29,31,.92); color:#fff; backdrop-filter:blur(10px);
+    padding:10px 22px; border-radius:100px; font-size:13px;
+    transition:transform .35s cubic-bezier(.32,.72,0,1); z-index:100;
+  }
+  #toast.show { transform:translateX(-50%) translateY(0); }
+
+  #tip {
+    position:fixed; bottom:24px; right:32px; font-size:12px;
+    color:#86868b; z-index:10;
+  }
+
+  @media (max-width:760px) {
+    #ui { left:12px; right:12px; width:auto; top:auto; bottom:12px;
+      transform:none; max-height:55vh; }
+    #tip { display:none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <div class="brand">
+    <h1>试衣间</h1>
+    <p>为你而设的虚拟穿搭</p>
+  </div>
+
+  <div class="group">
+    <div class="group-title">身材</div>
+    <div class="row"><span>身高</span><span class="num" id="hV">170 cm</span></div>
+    <input type="range" id="h" min="150" max="195" value="170">
+    <div class="row"><span>体重</span><span class="num" id="wV">60 kg</span></div>
+    <input type="range" id="w" min="40" max="110" value="60">
+  </div>
+
+  <div class="group">
+    <div class="group-title">上装</div>
+    <div class="opts" id="tops"></div>
+    <div class="colors" id="topColors"></div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">下装</div>
+    <div class="opts" id="bottoms"></div>
+    <div class="colors" id="botColors"></div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">我的衣橱</div>
+    <button class="btn" onclick="saveLook()">保存这套搭配</button>
+    <div id="savedList"></div>
+  </div>
+</div>
+
+<div id="tip">拖动旋转 · 滚轮缩放</div>
+<div id="toast"></div>
+
+<script>
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+const KEY = "looks";
+const getLooks = () => JSON.parse(localStorage.getItem(KEY) || "[]");
+
+function saveLook() {
+  const looks = getLooks();
+  looks.push({
+    top: curTop.name, bot: curBot.name,
+    topC: topC, botC: botC,
+    h: hEl.value, w: wEl.value
+  });
+  localStorage.setItem(KEY, JSON.stringify(looks));
+  renderSaved(); toast("已保存");
+}
+function delLook(i) {
+  const looks = getLooks();
+  looks.splice(i, 1);
+  localStorage.setItem(KEY, JSON.stringify(looks));
+  renderSaved();
+}
+function renderSaved() {
+  const box = document.getElementById("savedList");
+  box.innerHTML = "";
+  getLooks().forEach((l, i) => {
+    const d = document.createElement("div");
+    d.className = "saved";
+    const dots = `<i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${l.topC};box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)"></i>
+                  <i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${l.botC};box-shadow:inset 0 0 0 1px rgba(0,0,0,.1);margin-left:4px"></i>`;
+    d.innerHTML = `<span>${dots}&nbsp; ${l.top} · ${l.bot}</span>`;
+    const del = document.createElement("button");
+    del.className = "del"; del.textContent = "删除";
+    del.onclick = () => delLook(i);
+    d.appendChild(del);
+    box.appendChild(d);
+  });
+}
+</script>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf5f5f7);
+const camera = new THREE.PerspectiveCamera(40, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(0, 1.35, 3.4);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.enablePan = false;
+controls.minDistance = 2; controls.maxDistance = 5;
+
+scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+const key = new THREE.DirectionalLight(0xffffff, 1.2);
+key.position.set(2, 4, 3); key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xffffff, 0.4);
+fill.position.set(-2, 2, -2); scene.add(fill);
+
+const floor = new THREE.Mesh(
+  new THREE.CylinderGeometry(1.4, 1.4, 0.04, 48),
+  new THREE.MeshStandardMaterial({color: 0xffffff, roughness: .9})
+);
+floor.position.y = -0.02; floor.receiveShadow = true;
+scene.add(floor);
+
+const skinMat = new THREE.MeshStandardMaterial({color: 0xe8e0d8, roughness: .75});
+const person = new THREE.Group();
+const parts = {
+  head:  new THREE.Mesh(new THREE.SphereGeometry(.11, 32, 32), skinMat),
+  torso: new THREE.Mesh(new THREE.CylinderGeometry(.19,.16,.55,32), skinMat),
+  armL:  new THREE.Mesh(new THREE.CylinderGeometry(.045,.038,.62,20), skinMat),
+  armR:  new THREE.Mesh(new THREE.CylinderGeometry(.045,.038,.62,20), skinMat),
+  legL:  new THREE.Mesh(new THREE.CylinderGeometry(.065,.05,.75,20), skinMat),
+  legR:  new THREE.Mesh(new THREE.CylinderGeometry(.065,.05,.75,20), skinMat),
+};
+Object.values(parts).forEach(p => { p.castShadow = true; person.add(p); });
+parts.armL.rotation.z = .12; parts.armR.rotation.z = -.12;
+scene.add(person);
+
+const CLOTHES = {
+  tops: [
+    {id:"tshirt", name:"T恤",   len:.58, flare:1.05, sleeve:.22, waist:"tuck"},
+    {id:"hoodie", name:"卫衣",  len:.68, flare:1.18, sleeve:.55, waist:"loose"},
+    {id:"suit",   name:"西装",  len:.72, flare:1.15, sleeve:.60, waist:"formal"},
+  ],
+  bottoms: [
+    {id:"jeans",     name:"牛仔裤", len:.78, top:.16, bot:.11},
+    {id:"shorts",    name:"短裤",   len:.30, top:.17, bot:.15},
+    {id:"widePants", name:"阔腿裤", len:.78, top:.18, bot:.19},
+  ]
+};
+const PALETTE = ["#ffffff","#1d1d1f","#86868b","#b8a99a","#a3b5c2","#6b705c"];
+let curTop = CLOTHES.tops[0], curBot = CLOTHES.bottoms[0];
+let topC = "#ffffff", botC = "#1d1d1f";
+
+const topMat = new THREE.MeshStandardMaterial({color: topC, roughness:.85});
+const botMat = new THREE.MeshStandardMaterial({color: botC, roughness:.85});
+
+const topMesh = new THREE.Mesh(new THREE.CylinderGeometry(1,1,1,32), topMat);
+const sleeveL = new THREE.Mesh(new THREE.CylinderGeometry(1,1,1,20), topMat);
+const sleeveR = new THREE.Mesh(new THREE.CylinderGeometry(1,1,1,20), topMat);
+const botMesh = new THREE.Mesh(new THREE.CylinderGeometry(1,1,1,32), botMat);
+[topMesh, sleeveL, sleeveR, botMesh].forEach(m => { m.castShadow = true; scene.add(m); });
+
+function updateAll() {
+  const h = +hEl.value / 170;
+  const w = +wEl.value;
+  const fat = 1 + (w - 60) / 90;
+
+  parts.head.position.y  = 1.62*h;
+  parts.torso.position.y = 1.28*h; parts.torso.scale.set(fat,1,fat);
+  parts.armL.position.set(-.26*fat, 1.2*h, 0); parts.armL.scale.set(fat,1,fat);
+  parts.armR.position.set( .26*fat, 1.2*h, 0); parts.armR.scale.set(fat,1,fat);
+  parts.legL.position.set(-.09*fat, .42*h, 0); parts.legL.scale.set(fat,1,fat);
+  parts.legR.position.set( .09*fat, .42*h, 0); parts.legR.scale.set(fat,1,fat);
+
+  topMesh.scale.set(.2*fat*curTop.flare, curTop.len, .18*fat*curTop.flare);
+  topMesh.position.y = (1.42 - curTop.len/2)*h;
+  sleeveL.scale.set(.06*fat, curTop.sleeve, .06*fat);
+  sleeveL.position.set(-.27*fat, (1.5-curTop.sleeve/2)*h, 0); sleeveL.rotation.z = .12;
+  sleeveR.scale.copy(sleeveL.scale);
+  sleeveR.position.set(.27*fat, sleeveL.position.y, 0); sleeveR.rotation.z = -.12;
+
+  botMesh.scale.set(curBot.top*fat, curBot.len, curBot.top*fat);
+  botMesh.position.y = (curTop.waist==="tuck" ? 1.12 : 1.02)*h - curBot.len/2;
+}
+
+function renderOpts() {
+  const mk = (item, type, isOn) => {
+    const b = document.createElement("div");
+    b.className = "opt" + (isOn ? " on" : "");
+    b.textContent = item.name;
+    b.onclick = () => {
+      if (type === "top") curTop = item; else curBot = item;
+      renderOpts(); updateAll();
+    };
+    return b;
+  };
+  document.getElementById("tops").innerHTML = "";
+  CLOTHES.tops.forEach(t =>
+    document.getElementById("tops").appendChild(mk(t, "top", curTop.id===t.id)));
+  document.getElementById("bottoms").innerHTML = "";
+  CLOTHES.bottoms.forEach(b =>
+    document.getElementById("bottoms").appendChild(mk(b, "bot", curBot.id===b.id)));
+}
+
+function renderColors(boxId, current, onPick) {
+  const box = document.getElementById(boxId);
+  box.innerHTML = "";
+  PALETTE.forEach(c => {
+    const d = document.createElement("div");
+    d.className = "dot" + (c === current ? " on" : "");
+    d.style.background = c;
+    d.onclick = () => onPick(c);
+    box.appendChild(d);
+  });
+}
+function refreshColors() {
+  renderColors("topColors", topC, c => { topC = c; topMat.color.set(c); refreshColors(); });
+  renderColors("botColors", botC, c => { botC = c; botMat.color.set(c); refreshColors(); });
+}
+
+const hEl = document.getElementById("h"), wEl = document.getElementById("w");
+window.hEl = hEl; window.wEl = wEl;
+hEl.oninput = e => { document.getElementById("hV").textContent = e.target.value + " cm"; updateAll(); };
+wEl.oninput = e => { document.getElementById("wV").textContent = e.target.value + " kg"; updateAll(); };
+
+renderOpts();
+refreshColors();
+updateAll();
+renderSaved();
+
+let t = 0;
+(function animate() {
+  requestAnimationFrame(animate);
+  t += 0.008;
+  person.rotation.y = Math.sin(t) * 0.35;
+  controls.update();
+  renderer.render(scene, camera);
+})();
+
+window.onresize = () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+};
+</script>
+</body>
+</html>
